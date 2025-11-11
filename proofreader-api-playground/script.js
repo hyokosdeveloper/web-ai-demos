@@ -6,9 +6,18 @@
 const input = document.querySelector('[contenteditable]');
 const output = document.querySelector('output');
 const form = document.querySelector('form');
+const submit = document.querySelector('[type="submit"]');
 const legend = document.querySelector('span').firstChild;
 const popover = document.querySelector('[popover]');
 const button = popover.querySelector('button');
+const activityIndicator = document.querySelector('.activity-indicator');
+const includeCorrectionTypesCheckbox = document.querySelector(
+  '#include-correction-types'
+);
+const includeCorrectionExplanationsCheckbox = document.querySelector(
+  '#include-correction-explanations'
+);
+const legendContainer = document.querySelector('p:has(.legend)');
 
 (async () => {
   // Feature detection.
@@ -21,12 +30,29 @@ const button = popover.querySelector('button');
     preposition: null,
     'missing-words': null,
     grammar: null,
+     // Fallback for when `includeCorrectionTypes` is `false`.
+    other: null,
   };
   const errorTypes = Object.keys(errorHighlights);
 
   let corrections;
   let correctedInput;
   let currentCorrection;
+
+  let proofreader;
+
+  [
+    includeCorrectionExplanationsCheckbox,
+    includeCorrectionTypesCheckbox,
+  ].forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      legendContainer.style.visibility = includeCorrectionTypesCheckbox.checked
+        ? 'visible'
+        : 'hidden';
+      proofreader = null;
+      submit.click();
+    });
+  });
 
   // Draw the legends.
   const preTrimStartLength = legend.textContent.length;
@@ -53,24 +79,30 @@ const button = popover.querySelector('button');
     document.addEventListener('click', (event) => {
       const mouseX = event.clientX;
       const mouseY = event.clientY;
+      // ToDo: Make the error clicking logic based on CSS Highlights.
       console.log(CSS.highlights.highlightsFromPoint(mouseX, mouseY));
     });
   }
 
-  let proofreader;
-  if (!proofreaderAPISupported) {
-    document.querySelector('.error').hidden = false;
-  }
+  document.querySelector('.error').hidden = proofreaderAPISupported;
 
   form.querySelector('button').disabled = false;
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-
+    activityIndicator.textContent = '⏳ Proofreading...';
     // Use existing proofreader instance or create new instance.
-    proofreader = proofreader || await self.Proofreader.create({
-      includeCorrectionTypes: true,
-      includeCorrectionExplanations: true,
-    });
+    if (proofreaderAPISupported) {
+      proofreader =
+        proofreader ||
+        (await self.Proofreader.create({
+          includeCorrectionTypes: includeCorrectionTypesCheckbox.checked,
+          includeCorrectionExplanations:
+            includeCorrectionExplanationsCheckbox.checked,
+          expectedInputLanguagues: ['en'],
+          correctionExplanationLanguage: 'en',
+        }));
+    }
 
     // Remove previous highlights, only keep the legend highlights.
     for (const errorType of errorTypes) {
@@ -92,8 +124,11 @@ const button = popover.querySelector('button');
       ));
     } else {
       // Use fake data.
-      ({ correctedInput, corrections } = await (await fetch('fake.json')).json());
+      ({ correctedInput, corrections } = await (
+        await fetch('fake.json')
+      ).json());
     }
+    activityIndicator.textContent = '';
     if (!corrections) {
       corrections = [];
     }
@@ -103,6 +138,7 @@ const button = popover.querySelector('button');
       const range = new Range();
       range.setStart(textNode, correction.startIndex);
       range.setEnd(textNode, correction.endIndex);
+      correction.type ||= 'other';
       errorHighlights[correction.type].add(range);
     }
 
@@ -152,8 +188,13 @@ const button = popover.querySelector('button');
     highlightRange.setStart(text, 0);
     highlightRange.setEnd(text, heading.length);
     errorHighlights[type].add(highlightRange);
-    popover.querySelector('.correction').textContent = correction;
-    popover.querySelector('.explanation').textContent = explanation;
+    popover.querySelector('.correction').textContent =
+      correction || '[Remove word]';
+    if (explanation) {
+      popover.querySelector('.explanation').textContent = explanation;
+    } else {
+      popover.querySelector('*:has(.explanation)').style.display = 'none';
+    }
     popover.style.top = `${Math.round(top)}px`;
     popover.style.left = `${Math.round(left)}px`;
     form.querySelectorAll('button').forEach((button) => (button.tabIndex = -1));
@@ -188,6 +229,7 @@ const button = popover.querySelector('button');
       startIndex
     )}${correction}${input.textContent.substring(endIndex)}`;
     popover.hidePopover();
+    submit.click();
   });
 
   input.addEventListener('keyup', (e) => {

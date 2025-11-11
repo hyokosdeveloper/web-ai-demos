@@ -29,7 +29,11 @@ form {
   flex-direction: column;
 }
 
-label {
+p:has(.legend) {
+  visibility: hidden;
+}
+
+label.legend {
   font-weight: bold;
 }
 
@@ -84,7 +88,7 @@ button {
 }
 
 ::highlight(spelling) {
-  text-decoration-color: light-dark(purple, yellow) ;
+  text-decoration-color: light-dark(purple, yellow);
   text-decoration-line: underline;
   text-decoration-style: wavy;
 }
@@ -117,4 +121,14 @@ button {
   text-decoration-color: light-dark(blue, lightblue);
   text-decoration-line: underline;
   text-decoration-style: wavy;
+}
+
+::highlight(other) {
+  text-decoration-color: light-dark(gray, lightgray);
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+}
+
+footer {
+  margin-block: 1rem;
 }
